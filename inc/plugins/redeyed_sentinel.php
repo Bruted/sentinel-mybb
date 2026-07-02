@@ -6,19 +6,19 @@
  * reputation) to the MyBB registration form.
  *
  * Sentinel is free to install and stays INERT until you set both the
- * Site Key and the API Key in the plugin settings. With empty keys the
- * plugin "fails open" and never blocks registration.
+ * Site Key and the Secret Key in the plugin settings. With no Secret Key
+ * the plugin "fails open" and never blocks registration.
  *
  * Settings (Admin CP -> Configuration -> Settings -> Redeyed Sentinel):
- *   - sentinel_site_key : public site key (safe to expose in HTML)
- *   - sentinel_api_key  : secret API key (server-side only, never echoed)
- *   - sentinel_base_url : Sentinel base URL (default https://redeyed.com)
+ *   - sentinel_site_key   : public site key (safe to expose in HTML)
+ *   - sentinel_secret_key : per-site secret key (server-side only, never echoed)
+ *   - sentinel_base_url   : Sentinel base URL (default https://redeyed.com)
  *
  * @package   Redeyed Sentinel
  * @author    Redeyed Corporation
  * @license   MIT (2026)
  * @link      https://redeyed.com
- * @version   1.0
+ * @version   1.0.1
  */
 
 // Disallow direct access to this file for security reasons.
@@ -51,11 +51,11 @@ function redeyed_sentinel_info()
 {
     return array(
         'name'          => 'Redeyed Sentinel',
-        'description'   => 'Adds the Redeyed Sentinel CAPTCHA (self-hosted CAPTCHA + IP reputation) to the registration form. Free and inert until Site Key and API Key are configured.',
+        'description'   => 'Adds the Redeyed Sentinel CAPTCHA (self-hosted CAPTCHA + IP reputation) to the registration form. Free and inert until Site Key and Secret Key are configured.',
         'website'       => 'https://redeyed.com',
         'author'        => 'Redeyed Corporation',
         'authorsite'    => 'https://redeyed.com',
-        'version'       => '1.0',
+        'version'       => '1.0.1',
         'guid'          => '',
         'codename'      => 'redeyed_sentinel',
         'compatibility' => '18*',
@@ -104,15 +104,15 @@ function redeyed_sentinel_install()
         array(
             'name'        => 'sentinel_site_key',
             'title'       => 'Sentinel Site Key',
-            'description' => 'Public site key from Redeyed Lab &rarr; Developer &rarr; Sentinel Sites. Safe to expose in HTML.',
+            'description' => 'Public site key from Redeyed Lab &rarr; Sentinel &rarr; Sites. Safe to expose in HTML.',
             'optionscode' => 'text',
             'value'       => '',
             'disporder'   => 1,
         ),
         array(
-            'name'        => 'sentinel_api_key',
-            'title'       => 'Sentinel API Key',
-            'description' => 'Secret API key from Redeyed Lab &rarr; Developer &rarr; API Keys. Used server-side only and never shown in the page.',
+            'name'        => 'sentinel_secret_key',
+            'title'       => 'Sentinel Secret Key',
+            'description' => 'Per-site secret key from Redeyed Lab &rarr; Sentinel &rarr; Sites (shown once). Used server-side only to authenticate verification and never shown in the page.',
             'optionscode' => 'text',
             'value'       => '',
             'disporder'   => 2,
@@ -264,19 +264,20 @@ function redeyed_sentinel_verify()
 {
     global $mybb, $errors, $lang;
 
-    $site_key = isset($mybb->settings['sentinel_site_key']) ? trim($mybb->settings['sentinel_site_key']) : '';
-    $api_key  = isset($mybb->settings['sentinel_api_key'])  ? trim($mybb->settings['sentinel_api_key'])  : '';
-    $base_url = isset($mybb->settings['sentinel_base_url']) ? trim($mybb->settings['sentinel_base_url']) : '';
+    $site_key   = isset($mybb->settings['sentinel_site_key'])   ? trim($mybb->settings['sentinel_site_key'])   : '';
+    $secret_key = isset($mybb->settings['sentinel_secret_key']) ? trim($mybb->settings['sentinel_secret_key']) : '';
+    $base_url   = isset($mybb->settings['sentinel_base_url'])   ? trim($mybb->settings['sentinel_base_url'])   : '';
 
-    // Fail open: if either key is missing, Sentinel is inert.
-    if ($site_key === '' || $api_key === '') {
+    // Fail open: if the Secret Key is missing, Sentinel is inert.
+    if ($secret_key === '') {
         return;
     }
 
-    $base_url = redeyed_sentinel_base_url($base_url);
-    $token    = (string) $mybb->get_input('sentinel-token');
+    $base_url  = redeyed_sentinel_base_url($base_url);
+    $token     = (string) $mybb->get_input('sentinel-token');
+    $remote_ip = function_exists('get_ip') ? (string) get_ip() : '';
 
-    $passed = redeyed_sentinel_check($base_url, $site_key, $api_key, $token);
+    $passed = redeyed_sentinel_check($base_url, $secret_key, $token, $remote_ip);
 
     if (!$passed) {
         redeyed_sentinel_fail();
@@ -308,18 +309,20 @@ function redeyed_sentinel_fail()
 /**
  * Performs the server-side verification request to Sentinel.
  *
- * Returns true only when the response decodes to data.success === true
- * or success === true. Any transport/decoding problem returns false so
- * the caller blocks registration (keys are present => Sentinel active).
+ * Uses the reCAPTCHA/Turnstile-style siteverify flow: the per-site Secret
+ * Key authenticates the call in the request body (no developer API key,
+ * no X-Api-Key header). Returns true only when the response decodes to
+ * success === true. Any transport/decoding problem returns false so the
+ * caller blocks registration (the Secret Key is present => Sentinel active).
  *
- * @param string $base_url Normalised base URL.
- * @param string $site_key Public site key.
- * @param string $api_key  Secret API key (sent only in the request header).
- * @param string $token    Token submitted by the widget.
+ * @param string $base_url   Normalised base URL.
+ * @param string $secret_key Per-site secret key (sent in the request body).
+ * @param string $token      Token submitted by the widget.
+ * @param string $remote_ip  Optional client IP address.
  *
  * @return bool
  */
-function redeyed_sentinel_check($base_url, $site_key, $api_key, $token)
+function redeyed_sentinel_check($base_url, $secret_key, $token, $remote_ip = '')
 {
     // No token at all -> not passed.
     if ($token === '') {
@@ -327,18 +330,22 @@ function redeyed_sentinel_check($base_url, $site_key, $api_key, $token)
     }
 
     if (!function_exists('curl_init')) {
-        // Without cURL we cannot verify. Block to be safe (keys are set).
+        // Without cURL we cannot verify. Block to be safe (Secret Key is set).
         return false;
     }
 
-    $endpoint = $base_url . '/api/v1/verify';
+    $endpoint = $base_url . '/sentinel/siteverify';
 
-    // Build the JSON body. Only the token and the public site key go in
-    // the body; the secret API key travels in the header.
-    $payload = json_encode(array(
-        'site_key' => $site_key,
-        'token'    => $token,
-    ));
+    // Build the JSON body. The Secret Key authenticates the call and the
+    // token is the widget response; the client IP is optional.
+    $body = array(
+        'secret'   => $secret_key,
+        'response' => $token,
+    );
+    if ($remote_ip !== '') {
+        $body['remoteip'] = $remote_ip;
+    }
+    $payload = json_encode($body);
 
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, $endpoint);
@@ -352,7 +359,6 @@ function redeyed_sentinel_check($base_url, $site_key, $api_key, $token)
     curl_setopt($ch, CURLOPT_HTTPHEADER, array(
         'Content-Type: application/json',
         'Accept: application/json',
-        'X-Api-Key: ' . $api_key, // secret key: header only, never echoed
     ));
 
     $response = curl_exec($ch);
@@ -369,16 +375,9 @@ function redeyed_sentinel_check($base_url, $site_key, $api_key, $token)
         return false;
     }
 
-    // PASSED only when data.success === true or success === true.
-    if (isset($decoded['data']) && is_array($decoded['data']) && isset($decoded['data']['success']) && $decoded['data']['success'] === true) {
-        return true;
-    }
-
-    if (isset($decoded['success']) && $decoded['success'] === true) {
-        return true;
-    }
-
-    return false;
+    // Response shape: {"success": true|false, "outcome": "...", "score": N}.
+    // PASSED only when success === true.
+    return isset($decoded['success']) && $decoded['success'] === true;
 }
 
 /* ------------------------------------------------------------------ *
