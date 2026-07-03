@@ -13,12 +13,16 @@
  *   - sentinel_site_key   : public site key (safe to expose in HTML)
  *   - sentinel_secret_key : per-site secret key (server-side only, never echoed)
  *   - sentinel_base_url   : Sentinel base URL (default https://redeyed.com)
+ *   - sentinel_widget     : optional widget type   -> data-widget     (behavioral|checkbox|press_hold|image_pick|...)
+ *   - sentinel_theme      : optional colour theme   -> data-theme      (auto|light|dark)
+ *   - sentinel_scheme     : optional colour scheme  -> data-scheme
+ *   - sentinel_difficulty : optional difficulty     -> data-difficulty (easy|medium|hard|max or 1-6; only RAISES strength)
  *
  * @package   Redeyed Sentinel
  * @author    Redeyed Corporation
  * @license   MIT (2026)
  * @link      https://redeyed.com
- * @version   1.0.1
+ * @version   1.0.2
  */
 
 // Disallow direct access to this file for security reasons.
@@ -55,7 +59,7 @@ function redeyed_sentinel_info()
         'website'       => 'https://redeyed.com',
         'author'        => 'Redeyed Corporation',
         'authorsite'    => 'https://redeyed.com',
-        'version'       => '1.0.1',
+        'version'       => '1.0.2',
         'guid'          => '',
         'codename'      => 'redeyed_sentinel',
         'compatibility' => '18*',
@@ -124,6 +128,38 @@ function redeyed_sentinel_install()
             'optionscode' => 'text',
             'value'       => 'https://redeyed.com',
             'disporder'   => 3,
+        ),
+        array(
+            'name'        => 'sentinel_widget',
+            'title'       => 'Sentinel Widget Type',
+            'description' => 'Optional. Which CAPTCHA challenge the widget renders. Leave on "Auto" to let Sentinel choose adaptively.',
+            'optionscode' => "select\n=Auto (site default)\nbehavioral=Behavioral\ncheckbox=Checkbox\npress_hold=Press &amp; Hold\nimage_pick=Image Pick",
+            'value'       => '',
+            'disporder'   => 4,
+        ),
+        array(
+            'name'        => 'sentinel_theme',
+            'title'       => 'Sentinel Theme',
+            'description' => 'Optional. Widget colour theme. Leave on "Auto" to follow the visitor\'s system/browser preference.',
+            'optionscode' => "select\n=Auto (site default)\nauto=Auto\nlight=Light\ndark=Dark",
+            'value'       => '',
+            'disporder'   => 5,
+        ),
+        array(
+            'name'        => 'sentinel_scheme',
+            'title'       => 'Sentinel Colour Scheme',
+            'description' => 'Optional. Named colour scheme for the widget accent (e.g. a brand palette name). Leave empty to use the default.',
+            'optionscode' => 'text',
+            'value'       => '',
+            'disporder'   => 6,
+        ),
+        array(
+            'name'        => 'sentinel_difficulty',
+            'title'       => 'Sentinel Difficulty',
+            'description' => 'Optional. Only RAISES challenge strength above the adaptive baseline &mdash; it never lowers it. Accepts easy|medium|hard|max or 1-6. Leave empty to use the adaptive baseline.',
+            'optionscode' => "select\n=Adaptive baseline\neasy=Easy\nmedium=Medium\nhard=Hard\nmax=Max",
+            'value'       => '',
+            'disporder'   => 7,
         ),
     );
 
@@ -205,6 +241,13 @@ function redeyed_sentinel_render()
     $site_key = isset($mybb->settings['sentinel_site_key']) ? trim($mybb->settings['sentinel_site_key']) : '';
     $base_url = isset($mybb->settings['sentinel_base_url']) ? trim($mybb->settings['sentinel_base_url']) : '';
 
+    // Optional widget customisation. Each renders as a data-* attribute only
+    // when non-empty, so omitting them keeps the default adaptive behaviour.
+    $widget_type = isset($mybb->settings['sentinel_widget'])     ? trim($mybb->settings['sentinel_widget'])     : '';
+    $theme       = isset($mybb->settings['sentinel_theme'])      ? trim($mybb->settings['sentinel_theme'])      : '';
+    $scheme      = isset($mybb->settings['sentinel_scheme'])     ? trim($mybb->settings['sentinel_scheme'])     : '';
+    $difficulty  = isset($mybb->settings['sentinel_difficulty']) ? trim($mybb->settings['sentinel_difficulty']) : '';
+
     // Inert when no keys are configured: do not render anything.
     if ($site_key === '') {
         return;
@@ -212,10 +255,26 @@ function redeyed_sentinel_render()
 
     $base_url = redeyed_sentinel_base_url($base_url);
 
+    // Build the optional data-* attributes. Each is emitted only when set and
+    // escaped exactly like the site key to stay inside the attribute context.
+    $attrs = '';
+    if ($widget_type !== '') {
+        $attrs .= ' data-widget="' . htmlspecialchars_uni($widget_type) . '"';
+    }
+    if ($theme !== '') {
+        $attrs .= ' data-theme="' . htmlspecialchars_uni($theme) . '"';
+    }
+    if ($scheme !== '') {
+        $attrs .= ' data-scheme="' . htmlspecialchars_uni($scheme) . '"';
+    }
+    if ($difficulty !== '') {
+        $attrs .= ' data-difficulty="' . htmlspecialchars_uni($difficulty) . '"';
+    }
+
     // Build the widget HTML. The site key is public but still escaped to
     // avoid breaking out of the attribute context.
     $script  = '<script src="' . htmlspecialchars_uni($base_url) . '/sentinel.js" async></script>';
-    $widget  = '<div class="sentinel-captcha" data-sitekey="' . htmlspecialchars_uni($site_key) . '"></div>';
+    $widget  = '<div class="sentinel-captcha" data-sitekey="' . htmlspecialchars_uni($site_key) . '"' . $attrs . '></div>';
 
     $markup =
         "\n<!-- Redeyed Sentinel -->\n" .

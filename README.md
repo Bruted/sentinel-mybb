@@ -44,12 +44,36 @@ only once in the Lab, so copy it when you create the site.
 > While the Secret Key is empty, Sentinel is **inert**: no widget is shown
 > and registration is never blocked.
 
+### Optional widget customization
+
+These four settings are **optional** and **backward-compatible**: leave them
+on their default (empty / "Auto") and the widget behaves exactly as before.
+When set, each is rendered as a `data-*` attribute on the
+`<div class="sentinel-captcha">` element (escaped with
+`htmlspecialchars_uni()`, the same as the Site Key) and read by
+`sentinel.js`.
+
+| Setting             | Attribute         | Values                                                | Effect                                                                 |
+|---------------------|-------------------|-------------------------------------------------------|------------------------------------------------------------------------|
+| **Widget Type**     | `data-widget`     | `behavioral`, `checkbox`, `press_hold`, `image_pick`, … | Which challenge the widget renders. Empty = adaptive site default.     |
+| **Theme**           | `data-theme`      | `auto`, `light`, `dark`                                | Widget colour theme. Empty = follow the visitor's system preference.   |
+| **Colour Scheme**   | `data-scheme`     | a named colour scheme (free text)                      | Accent colour scheme. Empty = default.                                 |
+| **Difficulty**      | `data-difficulty` | `easy`, `medium`, `hard`, `max` or `1`–`6`             | Only **raises** challenge strength above the adaptive baseline.        |
+
+> **Difficulty only raises the bar.** Sentinel already picks a challenge
+> strength adaptively per request. Setting **Difficulty** can push it
+> *higher* than that baseline, but it never *lowers* it below what the
+> adaptive engine would otherwise choose. Leave it empty to use the
+> adaptive baseline unchanged.
+
 ## How it works
 
 - **Render** (`member_register_end`): injects
   `<script src="{base_url}/sentinel.js" async></script>` and
   `<div class="sentinel-captcha" data-sitekey="{site_key}"></div>` into the
-  registration form. The widget adds a hidden `sentinel-token` input.
+  registration form (plus any optional `data-widget` / `data-theme` /
+  `data-scheme` / `data-difficulty` attributes you configured). The widget
+  adds a hidden `sentinel-token` input.
 - **Verify** (`member_do_register_start`): reads the posted
   `sentinel-token`, then POSTs (via cURL) to `{base_url}/sentinel/siteverify`
   with JSON body `{"secret":"…","response":"…","remoteip":"…"}` (the
@@ -76,6 +100,15 @@ Admin CP → Configuration → Plugins → **Redeyed Sentinel** →
 group and all Sentinel settings.
 
 ## Changelog
+
+### 1.0.2
+
+- Added four **optional**, backward-compatible widget-customization settings —
+  **Widget Type** (`data-widget`), **Theme** (`data-theme`), **Colour Scheme**
+  (`data-scheme`) and **Difficulty** (`data-difficulty`). Each renders as a
+  `data-*` attribute on the CAPTCHA `<div>` only when non-empty, escaped with
+  `htmlspecialchars_uni()`. **Difficulty** only raises challenge strength above
+  the adaptive baseline; it never lowers it.
 
 ### 1.0.1
 
