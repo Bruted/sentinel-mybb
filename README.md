@@ -59,6 +59,7 @@ When set, each is rendered as a `data-*` attribute on the
 | **Theme**           | `data-theme`      | `auto`, `light`, `dark`                                | Widget colour theme. Empty = follow the visitor's system preference.   |
 | **Colour Scheme**   | `data-scheme`     | a named colour scheme (free text)                      | Accent colour scheme. Empty = default.                                 |
 | **Difficulty**      | `data-difficulty` | `easy`, `medium`, `hard`, `max` or `1`–`6`             | Only **raises** challenge strength above the adaptive baseline.        |
+| **Widget Width**    | `data-width`      | `full`, `100%`, `340px`, … (free text)                | Width of the widget container. Empty = default width.                  |
 
 > **Difficulty only raises the bar.** Sentinel already picks a challenge
 > strength adaptively per request. Setting **Difficulty** can push it
@@ -100,6 +101,14 @@ Admin CP → Configuration → Plugins → **Redeyed Sentinel** →
 group and all Sentinel settings.
 
 ## Changelog
+
+### 1.0.3
+
+- Added an optional **Widget Width** setting (`sentinel_width`) that renders as
+  `data-width` on the CAPTCHA `<div>` only when non-empty (escaped with
+  `htmlspecialchars_uni()`). Accepts free text such as `full`, `100%` or
+  `340px`. Existing installs are back-filled with the new setting on
+  re-activation.
 
 ### 1.0.2
 
