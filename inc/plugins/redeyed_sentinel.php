@@ -17,12 +17,13 @@
  *   - sentinel_theme      : optional colour theme   -> data-theme      (auto|light|dark)
  *   - sentinel_scheme     : optional colour scheme  -> data-scheme
  *   - sentinel_difficulty : optional difficulty     -> data-difficulty (easy|medium|hard|max or 1-6; only RAISES strength)
+ *   - sentinel_width      : optional widget width   -> data-width      (full|100%|340px|...)
  *
  * @package   Redeyed Sentinel
  * @author    Redeyed Corporation
  * @license   MIT (2026)
  * @link      https://redeyed.com
- * @version   1.0.2
+ * @version   1.0.3
  */
 
 // Disallow direct access to this file for security reasons.
@@ -59,7 +60,7 @@ function redeyed_sentinel_info()
         'website'       => 'https://redeyed.com',
         'author'        => 'Redeyed Corporation',
         'authorsite'    => 'https://redeyed.com',
-        'version'       => '1.0.2',
+        'version'       => '1.0.3',
         'guid'          => '',
         'codename'      => 'redeyed_sentinel',
         'compatibility' => '18*',
@@ -161,6 +162,14 @@ function redeyed_sentinel_install()
             'value'       => '',
             'disporder'   => 7,
         ),
+        array(
+            'name'        => 'sentinel_width',
+            'title'       => 'Sentinel Widget Width',
+            'description' => 'Optional. Width for the widget container, e.g. full, 100% or 340px. Leave empty to use the default width.',
+            'optionscode' => 'text',
+            'value'       => '',
+            'disporder'   => 8,
+        ),
     );
 
     foreach ($settings as $setting) {
@@ -206,9 +215,56 @@ function redeyed_sentinel_uninstall()
  */
 function redeyed_sentinel_activate()
 {
+    global $db;
+
     // No template edits are required because we inject directly into the
-    // member_register output. Nothing to do here, but the function must
-    // exist for MyBB's activation flow.
+    // member_register output. We do, however, back-fill any settings added
+    // after the initial release so existing installs pick them up on upgrade.
+    $query = $db->simple_select('settinggroups', 'gid', "name='redeyed_sentinel'");
+    $gid   = (int) $db->fetch_field($query, 'gid');
+    if (!$gid) {
+        return;
+    }
+
+    // Settings introduced after 1.0.0. Each is inserted only when missing so
+    // re-activation stays idempotent and never duplicates a row.
+    $additional = array(
+        array(
+            'name'        => 'sentinel_width',
+            'title'       => 'Sentinel Widget Width',
+            'description' => 'Optional. Width for the widget container, e.g. full, 100% or 340px. Leave empty to use the default width.',
+            'optionscode' => 'text',
+            'value'       => '',
+            'disporder'   => 8,
+        ),
+    );
+
+    $changed = false;
+    foreach ($additional as $setting) {
+        $exists = $db->simple_select(
+            'settings',
+            'sid',
+            "gid='{$gid}' AND name='" . $db->escape_string($setting['name']) . "'"
+        );
+        if ($db->num_rows($exists)) {
+            continue;
+        }
+
+        $setting['name']        = $db->escape_string($setting['name']);
+        $setting['title']       = $db->escape_string($setting['title']);
+        $setting['description'] = $db->escape_string($setting['description']);
+        $setting['optionscode'] = $db->escape_string($setting['optionscode']);
+        $setting['value']       = $db->escape_string($setting['value']);
+        $setting['gid']         = $gid;
+
+        $db->insert_query('settings', $setting);
+        $changed = true;
+    }
+
+    // Rebuild settings.php so any newly inserted settings become available.
+    if ($changed) {
+        rebuild_settings();
+    }
 }
 
 /**
@@ -247,6 +303,7 @@ function redeyed_sentinel_render()
     $theme       = isset($mybb->settings['sentinel_theme'])      ? trim($mybb->settings['sentinel_theme'])      : '';
     $scheme      = isset($mybb->settings['sentinel_scheme'])     ? trim($mybb->settings['sentinel_scheme'])     : '';
     $difficulty  = isset($mybb->settings['sentinel_difficulty']) ? trim($mybb->settings['sentinel_difficulty']) : '';
+    $width       = isset($mybb->settings['sentinel_width'])      ? trim($mybb->settings['sentinel_width'])      : '';
 
     // Inert when no keys are configured: do not render anything.
     if ($site_key === '') {
@@ -269,6 +326,9 @@ function redeyed_sentinel_render()
     }
     if ($difficulty !== '') {
         $attrs .= ' data-difficulty="' . htmlspecialchars_uni($difficulty) . '"';
+    }
+    if ($width !== '') {
+        $attrs .= ' data-width="' . htmlspecialchars_uni($width) . '"';
     }
 
     // Build the widget HTML. The site key is public but still escaped to
