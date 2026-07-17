@@ -1,19 +1,33 @@
 # Redeyed Sentinel for MyBB 1.8
 
 Adds the **Redeyed Sentinel** CAPTCHA (self-hosted CAPTCHA + IP reputation)
-to your MyBB registration form. The plugin is free to install and stays
-**inert until you configure your keys** — with no Secret Key it never blocks
-registration ("fail open").
+to the MyBB forms bots hit hardest — **Registration, Login, Lost Password and
+Contact**. Each form is independently toggleable. The plugin is free to install
+and stays **inert until you configure your keys** — with no Secret Key it never
+blocks a submission ("fail open").
 
 - **Compatibility:** MyBB 1.8.x (`18*`)
 - **Author:** Redeyed Corporation — <https://redeyed.com>
 - **License:** MIT (2026)
 
+## Protected forms
+
+| Form | Setting | Default |
+|------|---------|---------|
+| Registration | `sentinel_protect_register` | **On** |
+| Login | `sentinel_protect_login` | Off |
+| Lost Password | `sentinel_protect_lostpw` | Off |
+| Contact | `sentinel_protect_contact` | Off |
+
+Only Registration is on by default, so upgrading from an earlier version
+changes nothing until you opt the other forms in.
+
 ## Files
 
 ```
-inc/plugins/redeyed_sentinel.php   The plugin
-inc/plugins/redeyed/               Reserved for optional helpers (unused)
+inc/plugins/redeyed_sentinel.php                       The plugin
+inc/languages/english/redeyed_sentinel.lang.php        Front-end strings (translatable)
+inc/languages/english/admin/redeyed_sentinel.lang.php  Admin CP strings
 README.md
 LICENSE
 ```
@@ -42,7 +56,15 @@ verification request body and is never printed to the page. It is shown
 only once in the Lab, so copy it when you create the site.
 
 > While the Secret Key is empty, Sentinel is **inert**: no widget is shown
-> and registration is never blocked.
+> and no submission is ever blocked.
+
+### Block log (admin visibility)
+
+With **Log blocked attempts** enabled (default), every blocked submission is
+recorded — form, source IP, outcome, score and time — and viewable at
+**Admin CP → Configuration → Sentinel Block Log**, where you can also clear it.
+The log lets you confirm Sentinel is working and spot attack spikes. Access is
+gated by the *"Can view the Redeyed Sentinel block log?"* admin permission.
 
 ### Optional widget customization
 
@@ -101,6 +123,24 @@ Admin CP → Configuration → Plugins → **Redeyed Sentinel** →
 group and all Sentinel settings.
 
 ## Changelog
+
+### 1.0.4
+
+- **Per-form protection.** Sentinel now guards **Login**, **Lost Password** and
+  **Contact** in addition to Registration, each with its own on/off setting
+  (`sentinel_protect_login`, `sentinel_protect_lostpw`, `sentinel_protect_contact`,
+  `sentinel_protect_register`). Only Registration is on by default, so upgrades
+  are non-breaking until you enable the others.
+- **Block log.** Optional logging of blocked attempts (form, IP, outcome, score,
+  time) with an **Admin CP → Configuration → Sentinel Block Log** viewer and a
+  clear action. Gated by a new admin permission. Toggle with `sentinel_log_blocks`
+  (on by default); a `redeyed_sentinel_log` table is created on install/activate
+  and removed on uninstall.
+- **Translatable strings.** The verification-failed message and the Admin CP
+  labels now live in language files (`inc/languages/english/redeyed_sentinel.lang.php`
+  and `inc/languages/english/admin/redeyed_sentinel.lang.php`).
+- Existing installs pick all of this up automatically on **re-activation**
+  (settings are back-filled and the log table created idempotently).
 
 ### 1.0.3
 
