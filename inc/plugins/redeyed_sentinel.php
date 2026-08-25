@@ -31,7 +31,7 @@
  * @author    Redeyed Corporation
  * @license   MIT (2026)
  * @link      https://redeyed.com
- * @version   1.0.4
+ * @version   1.0.5
  */
 
 // Disallow direct access to this file for security reasons.
@@ -39,7 +39,7 @@ if (!defined('IN_MYBB')) {
     die('Direct initialization of this file is not allowed.');
 }
 
-define('REDEYED_SENTINEL_VERSION', '1.0.4');
+define('REDEYED_SENTINEL_VERSION', '1.0.5');
 
 /* ------------------------------------------------------------------ *
  * Hook registration
@@ -149,7 +149,7 @@ function redeyed_sentinel_settings_defs()
         array(
             'name' => 'sentinel_widget', 'title' => 'Sentinel Widget Type',
             'description' => 'Optional. Which CAPTCHA challenge the widget renders. Leave on "Auto" to let Sentinel choose adaptively.',
-            'optionscode' => "select\n=Auto (site default)\nbehavioral=Behavioral\ncheckbox=Checkbox\npress_hold=Press &amp; Hold\nimage_pick=Image Pick",
+            'optionscode' => "select\n=Auto (site default)\nadaptive=Adaptive (recommended)\nall=Random (any type)\nbehavioral=Behavioral checkbox\npow=Proof of work (invisible)\npress_hold=Press &amp; Hold\ntext_math=Quick maths\nimage_puzzle=Image puzzle\nrotate_align=Rotate to align\nimage_pick=Pick the match\nrelational_scene=Relational scene\nmotion_track=Motion trail\nlight_shadow=Light and shadow\nshape_match=Object match",
             'value' => '', 'disporder' => 9,
         ),
         array(

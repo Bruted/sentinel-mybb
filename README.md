@@ -27,17 +27,25 @@ changes nothing until you opt the other forms in.
 ```
 inc/plugins/redeyed_sentinel.php                       The plugin
 inc/languages/english/redeyed_sentinel.lang.php        Front-end strings (translatable)
-inc/languages/english/admin/redeyed_sentinel.lang.php  Admin CP strings
 README.md
 LICENSE
 ```
 
 ## Installation
 
-1. Upload `inc/plugins/redeyed_sentinel.php` to your forum's
-   `inc/plugins/` directory (keep the path exactly as shown above).
+1. Upload the `inc/` folder into your forum's root, merging it with the
+   existing one so the files land at:
+   - `inc/plugins/redeyed_sentinel.php` — the plugin itself (required)
+   - `inc/languages/english/redeyed_sentinel.lang.php` — the message shown to
+     a blocked visitor (optional; the plugin falls back to a built-in English
+     string if it is missing)
+
+   Keep the paths exactly as shown.
 2. Log in to the **Admin CP → Configuration → Plugins**.
 3. Find **Redeyed Sentinel** and click **Install & Activate**.
+
+To translate the visitor-facing message, copy the language file to
+`inc/languages/<language>/` and translate the value.
 
 ## Configuration
 
@@ -77,7 +85,7 @@ When set, each is rendered as a `data-*` attribute on the
 
 | Setting             | Attribute         | Values                                                | Effect                                                                 |
 |---------------------|-------------------|-------------------------------------------------------|------------------------------------------------------------------------|
-| **Widget Type**     | `data-widget`     | `behavioral`, `checkbox`, `press_hold`, `image_pick`, … | Which challenge the widget renders. Empty = adaptive site default.     |
+| **Widget Type**     | `data-widget`     | `adaptive`, `all`, `behavioral`, `pow`, `press_hold`, `text_math`, `image_puzzle`, `rotate_align`, `image_pick`, `relational_scene`, `motion_track`, `light_shadow`, `shape_match` | Which challenge the widget renders. Empty = adaptive site default.     |
 | **Theme**           | `data-theme`      | `auto`, `light`, `dark`                                | Widget colour theme. Empty = follow the visitor's system preference.   |
 | **Colour Scheme**   | `data-scheme`     | a named colour scheme (free text)                      | Accent colour scheme. Empty = default.                                 |
 | **Difficulty**      | `data-difficulty` | `easy`, `medium`, `hard`, `max` or `1`–`6`             | Only **raises** challenge strength above the adaptive baseline.        |
@@ -123,6 +131,13 @@ Admin CP → Configuration → Plugins → **Redeyed Sentinel** →
 group and all Sentinel settings.
 
 ## Changelog
+
+### 1.0.5
+
+- **Sentinel Widget Type now lists every challenge.** The setting was stuck on
+  four options, so newer challenges could not be selected at all. It now offers
+  Adaptive, Random, and all eleven concrete types — including the new **Object match** 3D challenge (`shape_match`) and the `relational_scene`, `motion_track` and `light_shadow` reasoning challenges.
+- Removed `checkbox` from the widget types — it was never a real Sentinel challenge and silently fell back to the site default. Use `behavioral` for the one-click checkbox, or `adaptive` to let Sentinel choose by risk.
 
 ### 1.0.4
 
