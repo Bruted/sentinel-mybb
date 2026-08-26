@@ -1,6 +1,6 @@
 # Redeyed Sentinel for MyBB 1.8
 
-Adds the **Redeyed Sentinel** CAPTCHA (self-hosted CAPTCHA + IP reputation)
+Adds the **Redeyed Sentinel** CAPTCHA (CAPTCHA + IP reputation)
 to the MyBB forms bots hit hardest — **Registration, Login, Lost Password and
 Contact**. Each form is independently toggleable. The plugin is free to install
 and stays **inert until you configure your keys** — with no Secret Key it never
@@ -55,7 +55,7 @@ Go to **Admin CP → Configuration → Settings → Redeyed Sentinel** and set:
 |-------------------|-------------------------------------------------------------|
 | **Site Key**      | Redeyed Lab → **Sentinel → Sites** (public key)             |
 | **Secret Key**    | Redeyed Lab → **Sentinel → Sites** (secret key, shown once)  |
-| **Base URL**      | Defaults to `https://redeyed.com`; change only if self-hosting elsewhere |
+| **Base URL**      | Defaults to `https://redeyed.com`; change only to point at a custom Sentinel endpoint |
 
 Both keys come from the same **Sentinel → Sites** screen in the Redeyed Lab.
 The **Site Key** is public and appears in the registration page HTML.
@@ -85,7 +85,7 @@ When set, each is rendered as a `data-*` attribute on the
 
 | Setting             | Attribute         | Values                                                | Effect                                                                 |
 |---------------------|-------------------|-------------------------------------------------------|------------------------------------------------------------------------|
-| **Widget Type**     | `data-widget`     | `adaptive`, `all`, `behavioral`, `pow`, `press_hold`, `text_math`, `image_puzzle`, `rotate_align`, `image_pick`, `relational_scene`, `motion_track`, `light_shadow`, `shape_match` | Which challenge the widget renders. Empty = adaptive site default.     |
+| **Widget Type**     | `data-widget`     | `adaptive`, `all`, `behavioral`, `pow`, `press_hold`, `text_math`, `image_puzzle`, `rotate_align`, `image_pick`, `relational_scene`, `motion_track`, `light_shadow`, `shape_match`, `count_match` | Which challenge the widget renders. Empty = adaptive site default.     |
 | **Theme**           | `data-theme`      | `auto`, `light`, `dark`                                | Widget colour theme. Empty = follow the visitor's system preference.   |
 | **Colour Scheme**   | `data-scheme`     | a named colour scheme (free text)                      | Accent colour scheme. Empty = default.                                 |
 | **Difficulty**      | `data-difficulty` | `easy`, `medium`, `hard`, `max` or `1`–`6`             | Only **raises** challenge strength above the adaptive baseline.        |
@@ -132,11 +132,22 @@ group and all Sentinel settings.
 
 ## Changelog
 
+### 1.0.6
+
+- **Widget Type, Theme and Colour Scheme dropdowns are refreshed from your
+  Sentinel server** (`GET /captcha/capabilities`, cached 12 hours), so new
+  challenge types and colour schemes appear without a plugin update. Colour
+  Scheme becomes a dropdown instead of a free-text field.
+- Premium colour schemes are labelled as paid-plan only. Previously you could
+  type one on a free plan and it would silently render the default instead.
+- If the server cannot be reached the existing dropdowns are left untouched, and
+  a value you already saved stays selectable even if it is no longer offered.
+
 ### 1.0.5
 
 - **Sentinel Widget Type now lists every challenge.** The setting was stuck on
   four options, so newer challenges could not be selected at all. It now offers
-  Adaptive, Random, and all eleven concrete types — including the new **Object match** 3D challenge (`shape_match`) and the `relational_scene`, `motion_track` and `light_shadow` reasoning challenges.
+  Adaptive, Random, and all twelve concrete types — including the new **Object match** 3D challenge (`shape_match`) and the `relational_scene`, `motion_track` and `light_shadow` reasoning challenges.
 - Removed `checkbox` from the widget types — it was never a real Sentinel challenge and silently fell back to the site default. Use `behavioral` for the one-click checkbox, or `adaptive` to let Sentinel choose by risk.
 
 ### 1.0.4

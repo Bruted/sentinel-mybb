@@ -2,8 +2,8 @@
 /**
  * Redeyed Sentinel for MyBB 1.8
  * ------------------------------------------------------------------
- * Adds the Redeyed Sentinel CAPTCHA (self-hosted CAPTCHA + IP
- * reputation) to MyBB's high-risk forms: Registration, Login, Lost
+ * Adds the Redeyed Sentinel CAPTCHA (CAPTCHA + IP reputation)
+ * to MyBB's high-risk forms: Registration, Login, Lost
  * Password and Contact. Each form is independently toggleable; only
  * Registration is on by default, so upgrades change nothing until you
  * opt the other forms in.
@@ -31,7 +31,7 @@
  * @author    Redeyed Corporation
  * @license   MIT (2026)
  * @link      https://redeyed.com
- * @version   1.0.5
+ * @version   1.0.6
  */
 
 // Disallow direct access to this file for security reasons.
@@ -39,7 +39,7 @@ if (!defined('IN_MYBB')) {
     die('Direct initialization of this file is not allowed.');
 }
 
-define('REDEYED_SENTINEL_VERSION', '1.0.5');
+define('REDEYED_SENTINEL_VERSION', '1.0.6');
 
 /* ------------------------------------------------------------------ *
  * Hook registration
@@ -70,6 +70,10 @@ $plugins->add_hook('admin_config_menu', 'redeyed_sentinel_admin_menu');
 $plugins->add_hook('admin_config_action_handler', 'redeyed_sentinel_admin_action_handler');
 $plugins->add_hook('admin_config_permissions', 'redeyed_sentinel_admin_permissions');
 $plugins->add_hook('admin_load', 'redeyed_sentinel_admin_load');
+// Refresh the widget/theme/scheme dropdowns from the Sentinel server when the
+// settings page for our group is opened (throttled to once every 12 hours).
+$plugins->add_hook('admin_config_settings_change', 'redeyed_sentinel_refresh_options');
+$plugins->add_hook('admin_config_settings_start', 'redeyed_sentinel_refresh_options');
 
 /* ------------------------------------------------------------------ *
  * Plugin metadata
@@ -79,7 +83,7 @@ function redeyed_sentinel_info()
 {
     return array(
         'name'          => 'Redeyed Sentinel',
-        'description'   => 'Self-hosted CAPTCHA + IP reputation for the forms bots love most — Registration, Login, Lost Password and Contact. Each form is toggleable; free and inert until Site Key and Secret Key are configured.',
+        'description'   => 'CAPTCHA + IP reputation for the forms bots love most — Registration, Login, Lost Password and Contact. Each form is toggleable; free and inert until Site Key and Secret Key are configured.',
         'website'       => 'https://redeyed.com',
         'author'        => 'Redeyed Corporation',
         'authorsite'    => 'https://redeyed.com',
@@ -148,8 +152,8 @@ function redeyed_sentinel_settings_defs()
         // --- Optional widget customisation ---
         array(
             'name' => 'sentinel_widget', 'title' => 'Sentinel Widget Type',
-            'description' => 'Optional. Which CAPTCHA challenge the widget renders. Leave on "Auto" to let Sentinel choose adaptively.',
-            'optionscode' => "select\n=Auto (site default)\nadaptive=Adaptive (recommended)\nall=Random (any type)\nbehavioral=Behavioral checkbox\npow=Proof of work (invisible)\npress_hold=Press &amp; Hold\ntext_math=Quick maths\nimage_puzzle=Image puzzle\nrotate_align=Rotate to align\nimage_pick=Pick the match\nrelational_scene=Relational scene\nmotion_track=Motion trail\nlight_shadow=Light and shadow\nshape_match=Object match",
+            'description' => 'Optional. Which CAPTCHA challenge the widget renders. This list is refreshed from your Sentinel server, so new challenge types appear automatically. Leave on "Auto" to let Sentinel choose adaptively.',
+            'optionscode' => "select\n=Auto (site default)\nadaptive=Adaptive (recommended)\nall=Random (any type)\nbehavioral=Behavioral checkbox\npow=Proof of work (invisible)\npress_hold=Press &amp; Hold\ntext_math=Quick maths\nimage_puzzle=Image puzzle\nrotate_align=Rotate to align\nimage_pick=Pick the match\nrelational_scene=Relational scene\nmotion_track=Motion trail\nlight_shadow=Light and shadow\nshape_match=Object match\ncount_match=Count match",
             'value' => '', 'disporder' => 9,
         ),
         array(
@@ -634,6 +638,198 @@ function redeyed_sentinel_admin_action_handler(&$actions)
 function redeyed_sentinel_admin_permissions(&$admin_permissions)
 {
     $admin_permissions['redeyed_sentinel_log'] = 'Can view the Redeyed Sentinel block log?';
+}
+
+/**
+ * Fetch the challenge types / themes / schemes this Sentinel deployment
+ * accepts, from GET {base_url}/captcha/capabilities.
+ *
+ * Hardcoding these lists is what let a stale value like "checkbox" sit in this
+ * plugin for months doing nothing: an unrecognised data-widget is not an error,
+ * it silently falls back to the site default, so the setting looked like it
+ * worked. Reading the list from the server means new challenge types show up
+ * here without a plugin release.
+ *
+ * Cached in MyBB's datastore for 12 hours. Fails soft — on any error the
+ * existing dropdown is left exactly as it is, so the settings page keeps
+ * working offline or behind a firewall. No keys are sent; the endpoint is
+ * public.
+ *
+ * @return array|null Decoded capabilities, or null when unavailable.
+ */
+function redeyed_sentinel_capabilities()
+{
+    global $mybb, $cache;
+
+    $stored = $cache->read('redeyed_sentinel_caps');
+    if (is_array($stored) && isset($stored['fetched_at']) && $stored['fetched_at'] > TIME_NOW - 43200) {
+        return isset($stored['data']) && is_array($stored['data']) && $stored['data'] ? $stored['data'] : null;
+    }
+
+    $base = trim((string) $mybb->settings['sentinel_base_url']);
+    if ($base === '') {
+        $base = 'https://redeyed.com';
+    }
+    $base = rtrim($base, '/');
+
+    $data = null;
+
+    if (function_exists('curl_init')) {
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $base . '/captcha/capabilities');
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 3);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, array('Accept: application/json'));
+
+        $response = curl_exec($ch);
+        $errno    = curl_errno($ch);
+        $status   = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($errno === 0 && $response !== false && $status >= 200 && $status < 300) {
+            $decoded = json_decode($response, true);
+            if (is_array($decoded) && !empty($decoded['types']['concrete'])) {
+                $data = $decoded;
+            }
+        }
+    }
+
+    // Always stamp the cache, success or failure, so a broken endpoint cannot
+    // make every settings page load wait on the timeout.
+    $cache->update('redeyed_sentinel_caps', array(
+        'fetched_at' => TIME_NOW,
+        'data'       => $data === null ? array() : $data,
+    ));
+
+    return $data;
+}
+
+/**
+ * Build a MyBB `select` optionscode string from a value => label map.
+ *
+ * @param  array $choices
+ * @return string
+ */
+function redeyed_sentinel_optionscode(array $choices)
+{
+    $lines = array('select', '=Auto (site default)');
+
+    foreach ($choices as $value => $label) {
+        // A literal newline or '=' would break the optionscode format.
+        $value = str_replace(array("\r", "\n", '='), '', (string) $value);
+        $label = str_replace(array("\r", "\n"), ' ', (string) $label);
+        $lines[] = $value . '=' . $label;
+    }
+
+    return implode("\n", $lines);
+}
+
+/**
+ * Rewrite the widget/theme/scheme dropdowns from the live capability list.
+ *
+ * Runs on the ACP settings screens. MyBB stores `optionscode` in the settings
+ * table, so keeping the options current means writing that column — which is
+ * why this only runs when the capability cache has expired (12h), and only
+ * touches rows whose options actually changed.
+ */
+function redeyed_sentinel_refresh_options()
+{
+    global $db, $mybb;
+
+    // Only bother on our own setting group; other groups do not need the call.
+    $gid = isset($mybb->input['gid']) ? (int) $mybb->input['gid'] : 0;
+    if ($gid > 0) {
+        $group = $db->fetch_field($db->simple_select('settinggroups', 'name', "gid='{$gid}'"), 'name');
+        if ($group !== 'redeyed_sentinel') {
+            return;
+        }
+    }
+
+    $caps = redeyed_sentinel_capabilities();
+    if (!is_array($caps)) {
+        return; // Offline: leave the existing dropdowns untouched.
+    }
+
+    $widget = array(
+        'adaptive' => 'Adaptive - escalate by risk (recommended)',
+        'all'      => 'Random - a different type per visitor',
+    );
+    // Human labels ride along with the keys in the same response. Titling the
+    // key would render "Shape Match", but that challenge matches on colour too
+    // and is called "Object match" wherever a customer can read it.
+    $capLabels = isset($caps['types']['labels']) ? (array) $caps['types']['labels'] : array();
+    foreach ((array) $caps['types']['concrete'] as $type) {
+        $key = (string) $type;
+        $widget[$key] = isset($capLabels[$key])
+            ? (string) $capLabels[$key]
+            : ucwords(str_replace('_', ' ', $key));
+    }
+
+    $theme = array();
+    foreach ((isset($caps['themes']) ? (array) $caps['themes'] : array('auto', 'light', 'dark')) as $t) {
+        $theme[(string) $t] = $t === 'auto' ? 'Auto - follow the system setting' : ucfirst((string) $t);
+    }
+
+    $scheme = array();
+    if (!empty($caps['schemes'])) {
+        foreach ((array) $caps['schemes'] as $entry) {
+            if (empty($entry['name'])) {
+                continue;
+            }
+            $name = (string) $entry['name'];
+            // A premium scheme on a free plan silently renders as `default`, so
+            // label it rather than offering a choice that quietly does nothing.
+            $scheme[$name] = empty($entry['premium']) ? $name : $name . ' (paid plans only)';
+        }
+    }
+
+    // Keep whatever is stored selectable even when the server no longer lists
+    // it. Without this, opening the settings page and saving would silently
+    // change a board's configuration — e.g. a legacy "checkbox" value, or a
+    // scheme that moved behind a paid plan, would quietly reset to Auto.
+    $preserve = function (array $choices, $setting) use ($mybb) {
+        $current = isset($mybb->settings[$setting]) ? (string) $mybb->settings[$setting] : '';
+        if ($current !== '' && !isset($choices[$current])) {
+            $choices[$current] = $current . ' (not currently offered)';
+        }
+
+        return $choices;
+    };
+
+    $widget = $preserve($widget, 'sentinel_widget');
+    $theme  = $preserve($theme, 'sentinel_theme');
+    $scheme = $scheme ? $preserve($scheme, 'sentinel_scheme') : $scheme;
+
+    $updates = array(
+        'sentinel_widget' => redeyed_sentinel_optionscode($widget),
+        'sentinel_theme'  => redeyed_sentinel_optionscode($theme),
+    );
+    if ($scheme) {
+        $updates['sentinel_scheme'] = redeyed_sentinel_optionscode($scheme);
+    }
+
+    $changed = false;
+
+    foreach ($updates as $name => $optionscode) {
+        $current = $db->fetch_field(
+            $db->simple_select('settings', 'optionscode', "name='" . $db->escape_string($name) . "'"),
+            'optionscode'
+        );
+
+        if ($current === false || $current === $optionscode) {
+            continue; // Setting missing, or already current — no write.
+        }
+
+        $db->update_query('settings', array('optionscode' => $db->escape_string($optionscode)), "name='" . $db->escape_string($name) . "'");
+        $changed = true;
+    }
+
+    if ($changed) {
+        rebuild_settings();
+    }
 }
 
 /**
