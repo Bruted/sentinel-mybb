@@ -25,6 +25,7 @@
  *   - sentinel_theme         : optional colour theme   -> data-theme
  *   - sentinel_scheme        : optional colour scheme  -> data-scheme
  *   - sentinel_difficulty    : optional difficulty     -> data-difficulty
+ *   - sentinel_widget_steps  : optional step count     -> data-widget-steps
  *   - sentinel_width         : optional widget width   -> data-width
  *
  * @package   Redeyed Sentinel
@@ -39,7 +40,7 @@ if (!defined('IN_MYBB')) {
     die('Direct initialization of this file is not allowed.');
 }
 
-define('REDEYED_SENTINEL_VERSION', '1.0.6');
+define('REDEYED_SENTINEL_VERSION', '1.1.0');
 
 /* ------------------------------------------------------------------ *
  * Hook registration
@@ -172,6 +173,12 @@ function redeyed_sentinel_settings_defs()
             'description' => 'Optional. Only RAISES challenge strength above the adaptive baseline &mdash; it never lowers it. Accepts easy|medium|hard|max or 1-6. Leave empty to use the adaptive baseline.',
             'optionscode' => "select\n=Adaptive baseline\neasy=Easy\nmedium=Medium\nhard=Hard\nmax=Max",
             'value' => '', 'disporder' => 12,
+        ),
+        array(
+            'name' => 'sentinel_widget_steps', 'title' => 'Sentinel Verification Steps',
+            'description' => 'Optional. Number of verification steps (1-7). PAID PLANS ONLY. Like difficulty this only RAISES the step count above the adaptive baseline; it never lowers it. Leave empty to let Sentinel decide.',
+            'optionscode' => "select\n=Adaptive baseline\n1=1\n2=2\n3=3\n4=4\n5=5\n6=6\n7=7",
+            'value' => '', 'disporder' => 13,
         ),
         array(
             'name' => 'sentinel_width', 'title' => 'Sentinel Widget Width',
@@ -418,6 +425,7 @@ function redeyed_sentinel_widget_markup()
         'data-theme'      => 'sentinel_theme',
         'data-scheme'     => 'sentinel_scheme',
         'data-difficulty' => 'sentinel_difficulty',
+        'data-widget-steps' => 'sentinel_widget_steps',
         'data-width'      => 'sentinel_width',
     );
 
